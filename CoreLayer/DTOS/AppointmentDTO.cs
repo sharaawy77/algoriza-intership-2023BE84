@@ -13,7 +13,7 @@ namespace CoreLayer.DTOS
     public class AppointmentDTO
     {
         [Required]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        
         public DayOfWeek DayOfWeek { set; get; }
         [Required]
         public string DoctorId { set; get; }

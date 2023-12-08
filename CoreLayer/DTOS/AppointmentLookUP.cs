@@ -16,10 +16,10 @@ namespace CoreLayer.DTOS
         public string Email { set; get; }
         public string Mobile { set; get; }
         public string Pic { set; get; }
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+       
 
         public Gender? Gender { set; get; }
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+       
 
         public Tuple<DayOfWeek,string> Times {  set; get; }
         //public AppointmentLookUP(Doctor doctor)

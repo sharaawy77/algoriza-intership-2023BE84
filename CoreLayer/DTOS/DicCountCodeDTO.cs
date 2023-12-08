@@ -11,13 +11,10 @@ namespace CoreLayer.DTOS
 {
     public class DicCountCodeDTO
     {
-        [Required]
-        public Guid code { set; get; } = new Guid();
-        [Required]
-        public bool IsActive { set; get; } = true;
 
-        [JsonConverter(typeof(JsonStringEnumConverter))]
 
+
+        [Required]
         public DiscountType discountType { set; get; } = DiscountType.Value;
         [Required]
         public int Value { set; get; } = 50;

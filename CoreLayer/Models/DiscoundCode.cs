@@ -17,7 +17,7 @@ namespace CoreLayer.Models
     {
         [Key]
         public int Id { set; get; }
-        public Guid code { set; get; } = new Guid();
+        public Guid code { set; get; } = Guid.NewGuid();
         public bool IsActive { set; get; }=true;
         [ForeignKey(name: "Patient")]
         public string PatientId { set; get; }

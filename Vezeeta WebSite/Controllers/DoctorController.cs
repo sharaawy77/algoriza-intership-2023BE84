@@ -10,19 +10,13 @@ namespace Vezeeta_WebSite.Controllers
     [ApiController]
     public class DoctorController : ControllerBase
     {
-        private readonly IBaseRepo<Doctor> docrepo;
-        private readonly IBaseRepo<Patient> patrepo;
-        private readonly IBaseRepo<Booking> bookrepo;
-        private readonly IBaseRepo<Time> timservice;
-        private readonly IBaseRepo<Appointment> appservice;
+        private readonly IUnitOfWork unitOfWork;
+       
 
-        public DoctorController(IBaseRepo<Doctor> docrepo,IBaseRepo<Patient> patrepo,IBaseRepo<Booking> bookrepo,IBaseRepo<Time> timservice,IBaseRepo<Appointment> appservice)
+        public DoctorController(IUnitOfWork unitOfWork)
         {
-            this.docrepo = docrepo;
-            this.patrepo = patrepo;
-            this.bookrepo = bookrepo;
-            this.timservice = timservice;
-            this.appservice = appservice;
+            this.unitOfWork = unitOfWork;
+           
         }
         [HttpPost("CreateAppointment")]
         public async Task<IActionResult> CreateAppointment([FromForm]AppointmentDTO appointment)
@@ -35,7 +29,7 @@ namespace Vezeeta_WebSite.Controllers
                     Price=appointment.Price,
                     DayOfWeek=appointment.DayOfWeek,
                 };
-                var res = await appservice.CreateAsync(appointt);
+                var res = await unitOfWork.apprepo.CreateAsync(appointt);
                 if (res)
                 {
                     return Ok(res);
@@ -55,7 +49,7 @@ namespace Vezeeta_WebSite.Controllers
                     AppointmentId = time.AppointmentId,
                     
                 };
-                var res = await timservice.CreateAsync(t);
+                var res = await unitOfWork.timrepo.CreateAsync(t);
                 if (res)
                 {
                     return Ok(res);
@@ -64,42 +58,76 @@ namespace Vezeeta_WebSite.Controllers
             }
             return BadRequest();
         }
-        [HttpPut("UpdateAppointmentDetails")]
-        public async Task<IActionResult> UpdateAppointmentDetails(int timeId,[FromQuery]AppointmentUpdate model)
+        [HttpPut("UpdateTime")]
+        public async Task<IActionResult> UpdateTime(int timeId,string time=null)
         {
-            
-            var oldtime = await timservice.GetByidAsync(timeId);
-            var appointt = await appservice.GetByidAsync(oldtime.AppointmentId);
-            if (ModelState.IsValid)
+            var bookings = unitOfWork.bookrepo.GetAll().ToList();
+            if (bookings.All(b=>b.TimeId!=timeId))
             {
-                oldtime.time = model.time != null ? model.time : oldtime.time;
-                appointt.DayOfWeek = model.day != 0 ? model.day : appointt.DayOfWeek;
-                var res = await timservice.Update(oldtime);
-                var res2 = await appservice.Update(appointt);
-                if (res!=null&&res2!=null)
+                var oldtime = await unitOfWork.timrepo.GetByidAsync(timeId);
+                //var appointt = await unitOfWork.apprepo.GetByidAsync(oldtime.AppointmentId);
+                if (ModelState.IsValid&&oldtime!=null)
                 {
-                    return Ok(true);
-                }
-                return BadRequest();
+                    oldtime.time = time != null ? time : oldtime.time;
+                    //appointt.DayOfWeek = model.day != 0 ? model.day : appointt.DayOfWeek;
+                    var res = await unitOfWork.timrepo.Update(oldtime);
+                    //var res2 = await unitOfWork.apprepo.Update(appointt);
+                    if (res != null )
+                    {
+                        return Ok(true);
+                    }
+                    return BadRequest("Server Error");
 
+                }
+                return BadRequest("Error With TimeId");
             }
-            return BadRequest();
+            
+            return BadRequest("Appointment Already in Use");
         }
+        [HttpPut("UpdateDay")]
+        public async Task<IActionResult> UpdateDay(int appointId, DayOfWeek day)
+        {
+           
+              
+                var appointment = await unitOfWork.apprepo.GetByidAsync(appointId);
+                if (appointment != null)
+                {
+                    
+                    appointment.DayOfWeek = day ;
+                    var res = await unitOfWork.apprepo.Update(appointment);
+                    //var res2 = await unitOfWork.apprepo.Update(appointt);
+                    if (res != null)
+                    {
+                        return Ok(true);
+                    }
+                    return BadRequest("Server Error");
+
+                }
+                return BadRequest("Error With AppointmentId");
+        }
+
+          
+      
         [HttpDelete("DeleteAppointmentTime")]
         public async Task<IActionResult> Delete(int id)
         {
-            return Ok(await timservice.Delete(id));
+            var res = await unitOfWork.timrepo.Delete(id);
+            if (res)
+            {
+                return Ok(res);
+            }
+            return BadRequest(false);
         }
         [HttpGet("GetDoctorBookings")]
         public async Task<IActionResult> GetDoctorBookings(string Id,int PNum=1,int PSize=5)
         {
-            var bookins = bookrepo.GetAll().Skip((PNum-1)*PSize).Take(PSize).ToList().Where(b => b.DoctorId == Id);
+            var bookins = unitOfWork.bookrepo.GetAll().Skip((PNum-1)*PSize).Take(PSize).ToList().Where(b => b.DoctorId == Id&&b.Status==RequestStatus.Pendeing);
             if (bookins != null)
             {
                 var lst = new List<DoctorRequestDTO>();
                 foreach (var book in bookins)
                 {
-                    var patient = await patrepo.GetByidAsync(book.PatientId);
+                    var patient = await unitOfWork.patrepo.GetByidAsync(book.PatientId);
 
 
                     var b = new DoctorRequestDTO()
@@ -119,7 +147,7 @@ namespace Vezeeta_WebSite.Controllers
                 {
                     Page = PNum,
                     NumOfDocs = PSize,
-                    NumOfPages = (int)Math.Ceiling(((decimal)(bookrepo.GetAll().Count() / PSize))),
+                    NumOfPages = (int)Math.Ceiling(((decimal)(unitOfWork.bookrepo.GetAll().Count() / PSize))),
                     Data = lst
 
                 });
@@ -129,22 +157,19 @@ namespace Vezeeta_WebSite.Controllers
         [HttpPut("ConfirmCheckUP")]
         public async Task<IActionResult> ConfirmCheckUP(int bookingid)
         {
-            var book= await bookrepo.GetByidAsync(bookingid);
+            var book= await unitOfWork.bookrepo.GetByidAsync(bookingid);
             
             if (book!=null)
             {
                 book.Status = RequestStatus.Completed;
-                var res = await bookrepo.Update(book);
+                var res = await unitOfWork.bookrepo.Update(book);
                 if (res!=null)
                 {
-                    var patient = await patrepo.GetByidAsync(book.PatientId);
+                    var patient = await unitOfWork.patrepo.GetByidAsync(book.PatientId);
                     patient.numofCompletedRequest += 1;
-                    if (patient.numofCompletedRequest==5)
-                    {
-                        RedirectToAction("CreateDisCountCode", "Admin", new {id=patient.Id});
-                        
-                    }
-                    var res2 = await patrepo.Update(patient);
+                    var res2 = await unitOfWork.patrepo.Update(patient);
+                    
+                    
                     if (res2!=null)
                     {
                         return Ok(true);

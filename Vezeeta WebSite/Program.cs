@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using ServicesLayer.Services;
 using System.Text;
 using Vezeeta_WebSite.Utilities;
 
@@ -49,6 +50,8 @@ builder.Services.AddIdentity<ApplicationUser,IdentityRole>()
 builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<JWT, JWT>();
 builder.Services.AddTransient(typeof(IBaseRepo<>), typeof(BaseRepo<>));
+builder.Services.AddTransient<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IRankingService, RankingService>();
 
 
 //builder.Services.AddSingleton<IUnitOfWork, UnitOfWork>();

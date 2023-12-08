@@ -14,27 +14,18 @@ namespace Vezeeta_WebSite.Controllers
     [ApiController]
     public class AccountController : ControllerBase
     {
-        private readonly IBaseRepo<DiscoundCode> disrepo;
-        private readonly IBaseRepo<Patient> patrepo;
-        private readonly IBaseRepo<Booking> bookrepo;
-        private readonly IBaseRepo<Specialization> specrepo;
-        private readonly IBaseRepo<Appointment> apprepo;
-        private readonly IBaseRepo<Time> timrepo;
-        private readonly IBaseRepo<Doctor> docservice;
+        private readonly IUnitOfWork unitOfWork;
+        
         private readonly JWT jwtService;
         private readonly IFileService fileService;
         private readonly UserManager<ApplicationUser> userManager;
         private readonly SignInManager<ApplicationUser> signInManager;
 
-        public AccountController(IBaseRepo<DiscoundCode> disrepo,IBaseRepo<Patient> patrepo,IBaseRepo<Booking> bookrepo,IBaseRepo<Specialization> specrepo,IBaseRepo<Appointment> apprepo,IBaseRepo<Time> timrepo,IBaseRepo<Doctor> docservice,JWT jwtService,IFileService  fileService, UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
+        public AccountController(IUnitOfWork unitOfWork,JWT jwtService,IFileService  fileService, UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
         {
-            this.disrepo = disrepo;
-            this.patrepo = patrepo;
-            this.bookrepo = bookrepo;
-            this.specrepo = specrepo;
-            this.apprepo = apprepo;
-            this.timrepo = timrepo;
-            this.docservice = docservice;
+            this.unitOfWork = unitOfWork;
+           
+           
             this.jwtService = jwtService;
             this.fileService = fileService;
             this.userManager = userManager;
@@ -117,14 +108,24 @@ namespace Vezeeta_WebSite.Controllers
         public async Task<IActionResult> GetAllAvailableAppointment(int PNum=1,int PSize=5,string DocNAme=null)
         {
             var lst = new List<AppointmentLookUP>();
-            var AllTimes = timrepo.GetAll();
-            var AvailableTimes =  AllTimes.Skip((PNum-1)*PSize).Take(PSize);
+            var AllTimes = unitOfWork.timrepo.GetAll();
+            var AllBookings = unitOfWork.bookrepo.GetAll();
+            var UsedTimesId = AllBookings.Select(b => b.TimeId);
+            var AllAviablbeTimes = new List<Time>();
+            foreach (var time in AllTimes)
+            {
+                if (UsedTimesId.All(timeId=>timeId!=time.Id))
+                {
+                    AllAviablbeTimes.Add(time);
+                }
+            }
+            var AvailableTimes =  AllAviablbeTimes.Skip((PNum-1)*PSize).Take(PSize);
             foreach (var time in AvailableTimes)
             {
-                var appoint =await  apprepo.GetByidAsync(time.AppointmentId);
+                var appoint =await  unitOfWork.apprepo.GetByidAsync(time.AppointmentId);
                 var dayWeek = appoint.DayOfWeek;
-                var doc = await docservice.GetByidAsync(appoint.DoctorId);
-                var spec = await specrepo.GetByidAsync(doc.SpecializationId);
+                var doc = await unitOfWork.docrepo.GetByidAsync(appoint.DoctorId);
+                var spec = await unitOfWork.specrepo.GetByidAsync(doc.SpecializationId);
                 var appointment = new AppointmentLookUP()
                 {
                     TimeId = time.Id,
@@ -158,15 +159,30 @@ namespace Vezeeta_WebSite.Controllers
 
         }
         [HttpPost("ReserveAppointment")]
-        public async Task<IActionResult> Reserve(int timeId, string UserID, int? DiscountCodeId = null)
+        public async Task<IActionResult> Reserve(int timeId, string UserID)
         {
             
             if (timeId!=0)
             {
-                var time = await timrepo.GetByidAsync(timeId);
-                var appoint = await apprepo.GetByidAsync(time.AppointmentId);
-                var doc = await docservice.GetByidAsync(appoint.DoctorId);
-                var spec = await specrepo.GetByidAsync(doc.SpecializationId);
+                var time = await unitOfWork.timrepo.GetByidAsync(timeId);
+                var appoint = await unitOfWork.apprepo.GetByidAsync(time.AppointmentId);
+                var doc = await unitOfWork.docrepo.GetByidAsync(appoint.DoctorId);
+                var spec = await unitOfWork.specrepo.GetByidAsync(doc.SpecializationId);
+                var patient = await unitOfWork.patrepo.GetByidAsync(UserID);
+                int? disID = null;
+                if (patient.numofCompletedRequest>=5)
+                {
+                    var code =  unitOfWork.disrepo.GetAll().FirstOrDefault(d => d.PatientId == null);
+                    if (code!=null)
+                    {
+                        disID = code.Id ;
+                        code.PatientId = UserID;
+                        await unitOfWork.disrepo.Update(code);
+                        patient.numofCompletedRequest = 0;
+                        await unitOfWork.patrepo.Update(patient);
+                    }
+                    
+                }
                 //var handler = new JwtSecurityTokenHandler();
                 //var jwttoken= handler.ReadJwtToken(token);
                 //var userId = jwttoken.Claims.FirstOrDefault(claim => claim.Type == "NameIdentifier")?.Value;
@@ -174,13 +190,14 @@ namespace Vezeeta_WebSite.Controllers
                 {
                     TimeId = timeId,
                     DoctorId = doc.Id,
-                    DisCodeId = DiscountCodeId,
+                    DisCodeId = disID,
                     Specialization = spec.Name,
-                    PatientId =  UserID
+                    PatientId =  UserID,
+                    
                 };
                 if (Request!=null)
                 {
-                    var res = await bookrepo.CreateAsync(Request);
+                    var res = await unitOfWork.bookrepo.CreateAsync(Request);
                     if (res)
                     {
                         return Ok(res);
@@ -194,30 +211,44 @@ namespace Vezeeta_WebSite.Controllers
         [HttpGet("GetPatientBookings")]
         public  async Task<IActionResult> GetPatientBookings(string Id)
         {
-            var bookins = bookrepo.GetAll().ToList().Where(b => b.PatientId == Id);
+            var bookins = unitOfWork.bookrepo.GetAll().ToList().Where(b => b.PatientId == Id);
             if (bookins!=null)
             {
                 var lst = new List<BookingDTO>();
                 foreach (var book in bookins)
                 {
-                    var patient = await patrepo.GetByidAsync(Id);
-                    var doc = await docservice.GetByidAsync(book.DoctorId);
-                    var spec = await specrepo.GetByidAsync(doc.SpecializationId);
-                    var time = await timrepo.GetByidAsync(book.TimeId);
-                    var appoint = await apprepo.GetByidAsync(time.AppointmentId);
-                    var dis = await disrepo.GetByidAsync(book.DisCodeId);
+                    var patient = await unitOfWork.patrepo.GetByidAsync(Id);
+                    var doc = await unitOfWork.docrepo.GetByidAsync(book.DoctorId);
+                    var spec = await unitOfWork.specrepo.GetByidAsync(doc.SpecializationId);
+                    var time = await unitOfWork.timrepo.GetByidAsync(book.TimeId);
+                    var appoint = await unitOfWork.apprepo.GetByidAsync(time.AppointmentId);
+                    var dis = await unitOfWork.disrepo.GetByidAsync(book.DisCodeId);
+                    int? fPrice = null;
                     Guid? code = dis!=null?dis.code:null;
+                    if (dis!=null)
+                    {
+                        if (dis.discountType==DiscountType.Value)
+                        {
+                            fPrice = appoint.Price - dis.Value;
+                        }
+                        else
+                        {
+                            fPrice = ((appoint.Price) - (int)((appoint.Price * dis.Value) / 100));
+                        }
+                    }
                     var b = new BookingDTO()
                     {
+                        BookinId=book.Id,
                         DoctorName = doc.FirstName + " " + doc.LastName,
                         Pic = doc.Image,
                         Specialization = spec.Name,
                         Day = appoint.DayOfWeek,
                         Time = time.time,
-                        PatientName=patient.UserName,
+                        PatientName = patient.UserName,
                         Price = appoint.Price,
-                        Status=book.Status,
-                        DisCode=code.HasValue ? code.Value : null,
+                        Status = book.Status,
+                        DisCode = code.HasValue ? code.Value : null,
+                        finalPrice = fPrice != null ? fPrice : appoint.Price,
                     };
                     lst.Add(b);
                     

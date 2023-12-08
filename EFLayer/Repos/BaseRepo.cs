@@ -20,70 +20,151 @@ namespace EFLayer.Repos
 
         public async Task<bool> CreateAsync(T entity)
         {
-            await context.Set<T>().AddAsync(entity);
-            var res =await context.SaveChangesAsync();
-            if (res!=0)
+            try
             {
-                return true;
+                await context.Set<T>().AddAsync(entity);
+                var res = await context.SaveChangesAsync();
+                if (res != 0)
+                {
+                    return true;
+                }
+                return false;
             }
-            return false;
+            catch (Exception)
+            {
+
+                return false;
+            }
+            
         }
         
         public async Task<bool> Delete(string id)
         {
-            var entity = await GetByidAsync(id);
-            context.Remove(entity);
-            var res=await context.SaveChangesAsync();
-            if (res!=0)
+            try
             {
-                return true;
+                var entity = await GetByidAsync(id);
+                context.Remove(entity);
+
+                var res = await context.SaveChangesAsync();
+                if (res != 0)
+                {
+                    return true;
+                }
+                return false;
             }
-            return false;
+            catch (Exception)
+            {
+
+                return false;
+            }
+           
         }
 
         public async Task<bool> Delete(int id)
         {
-            var entity = await GetByidAsync(id);
-            context.Remove(entity);
-            var res = await context.SaveChangesAsync();
-            if (res != 0)
+            try
             {
-                return true;
+                var entity = await GetByidAsync(id);
+                context.Remove(entity);
+                var res = await context.SaveChangesAsync();
+                if (res != 0)
+                {
+                    return true;
+                }
+                return false;
             }
-            return false;
+            catch (Exception)
+            {
+
+                return false;
+            }
+            
         }
 
         public  IQueryable<T> GetAll()
         {
-            return  context.Set<T>().AsQueryable();
+            try
+            {
+                return context.Set<T>().AsQueryable();
+
+            }
+            catch (Exception)
+            {
+
+                return null;
+            }
         }
 
         public async Task<T> GetByidAsync(string id)
         {
-            return await context.Set<T>().FindAsync(id);
+            try
+            {
+                if (id != null)
+                {
+                    return await context.Set<T>().FindAsync(id);
+
+                }
+                return null;
+            }
+            catch (Exception)
+            {
+
+                return null;
+            }
         }
 
         public async Task<T> GetByidAsync(int id)
         {
-            return await context.Set<T>().FindAsync(id);
+            try
+            {
+                if (id != null)
+                {
+                    return await context.Set<T>().FindAsync(id);
+
+                }
+                return null;
+            }
+            catch (Exception)
+            {
+
+                return null;
+            }
 
         }
 
         public async Task<T> GetByidAsync(int? id)
         {
-            if (id!=null)
+            try
             {
-                return await context.Set<T>().FindAsync(id);
+                if (id != null)
+                {
+                    return await context.Set<T>().FindAsync(id);
 
+                }
+                return null;
             }
-            return null;
+            catch (Exception)
+            {
+
+                return null;
+            }
+            
         }
 
         public async Task<T> Update(T entity)
         {
-            context.Update(entity);
-            await context.SaveChangesAsync();
-            return entity;
+            try
+            {
+                context.Update(entity);
+                await context.SaveChangesAsync();
+                return entity;
+            }
+            catch (Exception)
+            {
+
+                return null;
+            }
+            
         }
     }
 }

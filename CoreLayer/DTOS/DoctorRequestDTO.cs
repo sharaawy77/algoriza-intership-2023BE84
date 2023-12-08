@@ -16,7 +16,7 @@ namespace CoreLayer.DTOS
         public string Mobile { set; get; }
         public string Email { set; get; }
         public int Age { set; get; }
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+       
 
         public Gender? Gender { set; get; }
 

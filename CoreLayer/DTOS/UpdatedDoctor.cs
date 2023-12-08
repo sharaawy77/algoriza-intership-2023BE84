@@ -27,8 +27,7 @@ namespace CoreLayer.DTOS
 
         public DateTime? DateOfBirth { get; set; }
 
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-
+       
         public Gender? gender { get; set; }
     }
 }

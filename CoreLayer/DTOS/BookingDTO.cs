@@ -11,10 +11,11 @@ namespace CoreLayer.DTOS
 {
     public class BookingDTO
     {
+        public int BookinId { set; get; }
         public string DoctorName { set; get; }
         public string Pic { set; get; }
         public string Specialization { set; get; }
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+        
 
         public DayOfWeek Day { set; get; }
         public  string Time { get; set; }
@@ -26,6 +27,6 @@ namespace CoreLayer.DTOS
         
         public string PatientName { set; get; }
         public  int Price { set; get; }
-        //public int finalPrice { set; get; }
+        public int? finalPrice { set; get; }
     }
 }
