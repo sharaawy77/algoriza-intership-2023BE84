@@ -36,7 +36,12 @@ builder.Services.AddAuthentication(options =>
 
 
     };
+}).AddGoogle(options =>
+{
+    options.ClientId = builder.Configuration["GoogleAuth:ClientId"];
+    options.ClientSecret = builder.Configuration["GoogleAuth:ClientSecret"];
 });
+
 
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
@@ -53,8 +58,14 @@ builder.Services.AddTransient(typeof(IBaseRepo<>), typeof(BaseRepo<>));
 builder.Services.AddTransient<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IRankingService, RankingService>();
 
+//Cors 
 
-//builder.Services.AddSingleton<IUnitOfWork, UnitOfWork>();
+builder.Services.AddCors(options => options.AddPolicy("MyPolicy",
+    corsPolicybuilder=>corsPolicybuilder.AllowAnyMethod().AllowAnyHeader()
+    .AllowAnyOrigin()
+    ));
+
+
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -68,7 +79,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
+app.UseCors("MyPolicy");
 app.UseAuthorization();
 
 app.MapControllers();

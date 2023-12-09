@@ -1,11 +1,13 @@
 ﻿using CoreLayer.DTOS;
 using CoreLayer.Interface;
 using CoreLayer.Models;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Vezeeta_WebSite.Utilities;
 
 namespace Vezeeta_WebSite.Controllers
@@ -81,6 +83,7 @@ namespace Vezeeta_WebSite.Controllers
         [HttpPost("Login")]
         public async Task<IActionResult> Login(LoginUser model)
         {
+            
             if (ModelState.IsValid)
             {
                 var user = new EmailAddressAttribute().IsValid(model.Email) ? userManager.FindByEmailAsync(model.Email).Result?.UserName??"" : model.Email;
@@ -103,6 +106,86 @@ namespace Vezeeta_WebSite.Controllers
                 return Unauthorized();
             }
             return Unauthorized();
+        }
+        [HttpGet("ExternalLoginProviders")]
+        public IActionResult GetExternalLoginProviders()
+        {
+            var ProvidersNames=new List<string>();
+            var ExternalLogins = signInManager.GetExternalAuthenticationSchemesAsync().Result.ToList();
+            foreach (var item in ExternalLogins)
+            {
+                ProvidersNames.Add(item.Name);
+            }
+            return Ok(ProvidersNames );
+        }
+        [HttpPost("ExternalLogin")]
+        public IActionResult ExternalLogin( string provider, string returnURL=null)
+        {
+            returnURL = returnURL ?? Url.Content("~/");
+
+            var redirectURL = Url.Action("ExternalLoginCallBack", "Account", new { ReturnURL = returnURL });
+            var Props = signInManager.ConfigureExternalAuthenticationProperties(provider, redirectURL);
+            return new ChallengeResult(provider, Props);
+        }
+        [HttpPost("ExternalLoginCallBack")]
+        public async Task<IActionResult> ExternalLoginCallBack(string returnUrl=null,string remoteError=null)
+        {
+            returnUrl = returnUrl ?? Url.Content("~/");
+            if (remoteError!=null)
+            {
+                return BadRequest(remoteError);
+            }
+            var info = await signInManager.GetExternalLoginInfoAsync();
+            if (info == null)
+            {
+                return BadRequest("Error loading Info");
+            }
+            var Result = await signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, isPersistent: false, bypassTwoFactor: true);
+            if (Result.Succeeded)
+            {
+                var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+
+                var user = await userManager.FindByEmailAsync(email);
+
+                var res = jwtService.CreateJWT(info.Principal.FindFirstValue(ClaimTypes.NameIdentifier), info.Principal.FindFirstValue(ClaimTypes.GivenName), userManager.GetRolesAsync(user).Result.ToList());
+                return Ok(new
+                {
+                    token = res.Item1,
+                    expiration = res.Item2,
+                    userId = user.Id,
+                });
+            }
+            else
+            {
+                var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+                if (email!=null)
+                {
+                    var user = await userManager.FindByEmailAsync(email);
+                    if (user==null)
+                    {
+                        user = new Patient()
+                        {
+                            UserName=info.Principal.FindFirstValue(ClaimTypes.Email),
+                            Email = info.Principal.FindFirstValue(ClaimTypes.Email),
+
+                        };
+                        await userManager.CreateAsync(user);
+                        var res = await userManager.AddToRoleAsync(user, "Patient");
+                        
+                    }
+                    await userManager.AddLoginAsync(user, info);
+                    await signInManager.SignInAsync(user, isPersistent: false);
+                    var resultt = jwtService.CreateJWT(info.Principal.FindFirstValue(ClaimTypes.NameIdentifier), info.Principal.FindFirstValue(ClaimTypes.GivenName), userManager.GetRolesAsync(user).Result.ToList());
+                    return Ok(new
+                    {
+                        token = resultt.Item1,
+                        expiration = resultt.Item2,
+                        userId = user.Id,
+                    });
+                }
+                return BadRequest();
+                
+            }
         }
         [HttpGet("GetAllAvailableAppointment")]
         public async Task<IActionResult> GetAllAvailableAppointment(int PNum=1,int PSize=5,string DocNAme=null)
